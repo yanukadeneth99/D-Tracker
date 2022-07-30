@@ -20,16 +20,16 @@ contract ETracker is
     struct Account {
         bytes32 name;
         uint256 amountOfCategories;
-        mapping(uint256 => bytes32) categories;
-        mapping(uint256 => uint256) catToAmountofEntries;
-        mapping(uint256 => mapping(uint256 => int256)) entries; //CatID, EntryID, Amount
+        mapping(uint256 => bytes32) categories; // ID => Category Name
+        mapping(uint256 => uint256) catToAmountofEntries; // CatID => How many Entries
+        mapping(uint256 => mapping(uint256 => Entry)) entries; // CatID => (EntryID => Entry[amount,created_At,updated_At])
     }
 
-    /// @notice Contains all Transaction object, which contains a name, all categories and total values
-    struct AllTransactions {
-        bytes32 name;
-        bytes32[] categories;
-        int256[] amounts;
+    /// @notice Every entry (transaction), has a positive or negative amount and the time it was created.
+    struct Entry {
+        int256 amount;
+        uint256 created_At;
+        uint256 update_At;
     }
 
     /// @notice Contains all the mapping from address to Account
@@ -45,6 +45,10 @@ contract ETracker is
         _;
     }
 
+    // =============================================================
+    //                           CREATION
+    // =============================================================
+
     /// @notice Create an account if it does not exist
     function createAccount(bytes32 _name) external whenNotPaused {
         require(
@@ -52,6 +56,59 @@ contract ETracker is
             "Account already exists"
         );
         _accounts[msg.sender].name = _name;
+    }
+
+    /// @notice Create a Category by name and update the amount of Categories
+    function createCategory(bytes32 _name)
+        external
+        whenNotPaused
+        alreadySigned
+    {
+        uint256 newAmount = _accounts[msg.sender].amountOfCategories + 1;
+        _accounts[msg.sender].categories[newAmount] = _name;
+        _accounts[msg.sender].amountOfCategories = newAmount;
+    }
+
+    /// @notice Create a Entry to a Category
+    function createEntry(uint256 _catId, int256 _amount)
+        external
+        whenNotPaused
+        alreadySigned
+    {
+        uint256 _newEntryId = _accounts[msg.sender].catToAmountofEntries[
+            _catId
+        ] + 1;
+        uint256 _nowTime = block.timestamp;
+        _accounts[msg.sender].entries[_catId][_newEntryId].amount = _amount;
+        _accounts[msg.sender]
+        .entries[_catId][_newEntryId].created_At = _nowTime;
+        _accounts[msg.sender].entries[_catId][_newEntryId].update_At = _nowTime;
+    }
+
+    /// @notice Change the name to the new name
+    function changeName(bytes32 _newName) external whenNotPaused alreadySigned {
+        require(
+            _accounts[msg.sender].name != _newName,
+            "Setting name is the same!"
+        );
+        _accounts[msg.sender].name = _newName;
+    }
+
+    // =============================================================
+    //                           UPDATION
+    // =============================================================
+
+    /// @notice Change the name of the Category per the ID
+    function updateCategoryName(uint256 _catId, bytes32 _newName)
+        external
+        whenNotPaused
+        alreadySigned
+    {
+        require(
+            _accounts[msg.sender].categories[_catId] != _newName,
+            "You have passed the same name"
+        );
+        _accounts[msg.sender].categories[_catId] = _newName;
     }
 
     // =============================================================
@@ -71,11 +128,11 @@ contract ETracker is
 
     /// @dev Returns a byte32 array of all the categories the user has
     function getAllCategories()
-        public
+        external
         view
         whenNotPaused
         alreadySigned
-        returns (bytes32[] memory)
+        returns (bytes32[] memory, uint256 amount)
     {
         Account storage _ac = _accounts[msg.sender];
         uint256 amount = _ac.amountOfCategories;
@@ -84,7 +141,7 @@ contract ETracker is
             _categories[i] = _ac.categories[i];
         }
 
-        return _categories;
+        return (_categories, _accounts[msg.sender].amountOfCategories);
     }
 
     /// @notice Get the Category Name from ID
@@ -135,47 +192,33 @@ contract ETracker is
         return _accounts[msg.sender].name;
     }
 
-    /// @notice Gets all Transactions and returns a Transaction Object
-    function getAllTransactions()
+    /// @notice Gets all Transactions per sent Category ID as an Entry array
+    function getAllTransactionsPerCat(uint256 _catId)
         external
         view
         alreadySigned
         whenNotPaused
-        returns (AllTransactions memory)
+        returns (bytes32, Entry[] memory)
     {
-        // Create Trans Object
-        AllTransactions memory alltrans;
         Account storage _ac = _accounts[msg.sender];
-        alltrans.name = _ac.name; // Name
-        uint256 _catAmount = _ac.amountOfCategories;
-        bytes32[] memory _categories = new bytes32[](_catAmount);
-        int256[] memory _trans = new int256[](_catAmount);
+        bytes32 _catName = _ac.categories[_catId];
+        uint256 _entryAmount = _ac.catToAmountofEntries[_catId];
 
-        // Looping over the amount of categories
-        for (uint256 i; i < _catAmount; i++) {
-            _categories[i] = _ac.categories[i]; // Pass that category name of that index
-            uint256 _entAmount = _ac.catToAmountofEntries[i]; // Get the amount of Entries of the category at index
-            int256 tot = 0; // Create a new variable that will add/sub
-            // Looping over the number of entries per that category
-            for (uint256 j; j < _entAmount; j++) {
-                tot += _ac.entries[i][j]; // Add/Sub the number to the total
-            }
-            _trans[i] = tot; // Return the total into the amount array of that category's index
+        Entry[] memory allEntries = new Entry[](_entryAmount);
+        for (uint256 i; i < _entryAmount; i++) {
+            allEntries[i] = _ac.entries[_catId][i];
         }
 
-        alltrans.categories = _categories; // Categories
-        alltrans.amounts = _trans; // Amounts
-
-        return alltrans;
+        return (_catName, allEntries);
     }
 
-    /// @notice Gets the entry at that Category and Entry ID
+    /// @notice Gets the entry at that Category an Entry Object with amount and timestamps
     function getEntry(uint256 _catId, uint256 _entryId)
         external
         view
         whenNotPaused
         alreadySigned
-        returns (int256)
+        returns (Entry memory)
     {
         return _accounts[msg.sender].entries[_catId][_entryId];
     }
@@ -196,8 +239,6 @@ contract ETracker is
     function resume() external onlyOwner {
         _unpause();
     }
-
-    //TODO : use `modifier whenNotPaused()` and `modifier whenPaused()` in the project
 
     ///@notice Authorize Upgrade Version
     function _authorizeUpgrade(address) internal override onlyOwner {}
