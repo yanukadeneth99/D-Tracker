@@ -8,7 +8,7 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 /// @title Expense Tracker
 /// @author Yanuka Deneth
-/// @notice A Contract to track expenses for individual accounts/address. Can be used for Smart Contracts and EOA
+/// @notice An Upgradable Contract to track expenses for individual accounts/address. Can be used for Smart Contracts and EOA
 contract ETracker is
     Initializable,
     UUPSUpgradeable,
@@ -16,7 +16,7 @@ contract ETracker is
     PausableUpgradeable
 {
     /// @notice Account to hold all values of a user
-    /// @dev Contains a name, amount of Categories, the categories itself, The Category to the Amount of Entries, and the entry itself (positive or negative number)
+    /// @dev Contains a name, amount of Categories, the category name, The Category to the Amount of Entries, and an entry object with amount and timestamps
     struct Account {
         bytes32 name;
         uint256 amountOfCategories;
@@ -25,7 +25,8 @@ contract ETracker is
         mapping(uint256 => mapping(uint256 => Entry)) entries; // CatID => (EntryID => Entry[amount,created_At,updated_At])
     }
 
-    /// @notice Every entry (transaction), has a positive or negative amount and the time it was created.
+    /// @notice Entry Object to track amount and timestamps
+    /// @dev Every entry (transaction), has a positive or negative amount and the time it was created.
     struct Entry {
         int256 amount;
         uint256 created_At;
@@ -45,35 +46,61 @@ contract ETracker is
         _;
     }
 
+    /// @notice Assumes the category Exists
+    /// @param _catId Category ID
+    modifier categoryExists(uint256 _catId) {
+        require(
+            _accounts[msg.sender].categories[_catId] != bytes32(0),
+            "Category does not exist!"
+        );
+        _;
+    }
+
     // =============================================================
     //                           CREATORS
     // =============================================================
 
-    /// @notice Create an account if it does not exist
+    /// @notice Create an account if it does not exist and the name is not null
+    /// @param _name Pass a 32 character name to be assigned to the account.
     function createAccount(bytes32 _name) external whenNotPaused {
         require(
             _accounts[msg.sender].name == bytes32(0),
             "Account already exists"
         );
+        require(_name != bytes32(0), "Null Name!");
         _accounts[msg.sender].name = _name;
     }
 
-    /// @notice Create a Category by name and update the amount of Categories
+    /// @notice Creates a Category by name and update the amount of Categories, if it does not exist already, name cannot be null.
+    /// @param _name Pass a 32 character category name to be created
     function createCategory(bytes32 _name)
         external
         whenNotPaused
         alreadySigned
     {
-        uint256 newAmount = _accounts[msg.sender].amountOfCategories + 1;
+        require(_name != bytes32(0), "Null Name!");
+        uint256 _amountCat = _accounts[msg.sender].amountOfCategories;
+        if (_amountCat > 0) {
+            for (uint256 i; i < _amountCat; i++) {
+                require(
+                    _accounts[msg.sender].categories[i] != _name,
+                    "Category already exists!"
+                );
+            }
+        }
+        uint256 newAmount = _amountCat + 1;
         _accounts[msg.sender].categories[newAmount] = _name;
         _accounts[msg.sender].amountOfCategories = newAmount;
     }
 
-    /// @notice Create a Entry to a Category
+    /// @notice Create a Entry to a Category, if the category exists
+    /// @param _catId Category ID
+    /// @param _amount The amount of the transaction
     function createEntry(uint256 _catId, int256 _amount)
         external
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
     {
         uint256 _newEntryId = _accounts[msg.sender].catToAmountofEntries[
             _catId
@@ -89,12 +116,17 @@ contract ETracker is
     //                           UPDATORS
     // =============================================================
 
-    /// @notice Change the name of the Category per the ID
+    /// @notice Change the name of the Category, if the Category exists, and the name is not the same, name not null
+    /// @param _catId Category ID
+    /// @param _newName New Category 32 character name
+    /// @dev use `getCategoryID()` to get the ID
     function updateCategoryName(uint256 _catId, bytes32 _newName)
         external
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
     {
+        require(_newName != bytes32(0), "Null Name");
         require(
             _accounts[msg.sender].categories[_catId] != _newName,
             "You have passed the same name"
@@ -102,12 +134,15 @@ contract ETracker is
         _accounts[msg.sender].categories[_catId] = _newName;
     }
 
-    /// @notice Update the Entry if created
+    /// @notice Update the Entry if Category and entry exists
+    /// @param _catId Category ID
+    /// @param _entryId Entry ID
+    /// @dev use `getAmountOfEntriesPerCat()` to get the Amount of Categories
     function updateEntry(
         uint256 _catId,
         uint256 _entryId,
         int256 _newAmount
-    ) external alreadySigned whenNotPaused {
+    ) external alreadySigned whenNotPaused categoryExists(_catId) {
         require(
             _accounts[msg.sender].entries[_catId][_entryId].created_At !=
                 uint256(0),
@@ -121,12 +156,14 @@ contract ETracker is
         );
     }
 
-    /// @notice Change the name to the new name
+    /// @notice Change the name to the new name, if it's not the same name, and not null
+    /// @param _newName New 32 character name
     function updateName(bytes32 _newName) external whenNotPaused alreadySigned {
         require(
             _accounts[msg.sender].name != _newName,
             "Setting name is the same!"
         );
+        require(_newName != bytes32(0), "Null Name");
         _accounts[msg.sender].name = _newName;
     }
 
@@ -134,7 +171,8 @@ contract ETracker is
     //                           GETTERS
     // =============================================================
 
-    /// @notice How many Categories does the caller account have
+    /// @notice Get how many Categories does the caller account have
+    /// @return A Big Number with the amount of categories
     function getAmountOfCategories()
         external
         view
@@ -145,25 +183,31 @@ contract ETracker is
         return _accounts[msg.sender].amountOfCategories;
     }
 
-    /// @dev Returns a byte32 array of all the categories the user has
+    /// @notice Get all Categories the account has
+    /// @return An array of 32 characters which contain the category names
+    /// @return _amount The amount of categories
     function getAllCategories()
         external
         view
         whenNotPaused
         alreadySigned
-        returns (bytes32[] memory, uint256 amount)
+        returns (bytes32[] memory, uint256 _amount)
     {
         Account storage _ac = _accounts[msg.sender];
-        uint256 amount = _ac.amountOfCategories;
-        bytes32[] memory _categories = new bytes32[](amount);
-        for (uint256 i; i < amount; i++) {
-            _categories[i] = _ac.categories[i];
+        uint256 _amountCat = _ac.amountOfCategories; // Get the amount of categories
+        if (_amountCat > 0) {
+            bytes32[] memory _categories = new bytes32[](_amount);
+            for (uint256 i; i < _amountCat; i++) {
+                _categories[i] = _ac.categories[i]; // Get each Category and add to new array created before
+            }
+            return (_categories, _accounts[msg.sender].amountOfCategories);
         }
-
-        return (_categories, _accounts[msg.sender].amountOfCategories);
+        return (new bytes32[](0), 0);
     }
 
-    /// @notice Get the Category Name from ID
+    /// @notice Gets the Category Name from ID, if the category ID is valid
+    /// @param _id Category ID
+    /// @return _name 32 Character name of the Category
     function getCategoryName(uint256 _id)
         external
         view
@@ -171,10 +215,16 @@ contract ETracker is
         whenNotPaused
         returns (bytes32)
     {
+        require(
+            _accounts[msg.sender].categories[_id] != bytes32(0),
+            "Category does not exist!"
+        );
         return _accounts[msg.sender].categories[_id];
     }
 
-    /// @notice Gets the Category ID from the name
+    /// @notice Gets the Category ID from the name, if its not null
+    /// @param _name 32 Character Name
+    /// @return id Big Number ID the passed Category name
     function getCategoryID(bytes32 _name)
         external
         view
@@ -182,25 +232,32 @@ contract ETracker is
         whenNotPaused
         returns (uint256 id)
     {
+        require(_name != bytes32(0), "Null Name!");
         for (uint256 i; i < _accounts[msg.sender].amountOfCategories; i++) {
             if (_accounts[msg.sender].categories[i] == _name) {
                 return i;
+            } else {
+                require(true, "Category does not exist!");
             }
         }
     }
 
-    /// @notice Gets the Amount of Entries of the sent Category
+    /// @notice Gets how many entries are there in the category, if the category exists
+    /// @param _catId Category ID
+    /// @return amount The number of entries
     function getAmountOfEntriesPerCat(uint256 _catId)
         external
         view
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
         returns (uint256 amount)
     {
         return _accounts[msg.sender].catToAmountofEntries[_catId];
     }
 
     /// @notice Returns the name of the Account
+    /// @return 32 Character name of the Account
     function getName()
         external
         view
@@ -211,12 +268,16 @@ contract ETracker is
         return _accounts[msg.sender].name;
     }
 
-    /// @notice Gets all Transactions per sent Category ID as an Entry array
+    /// @notice Gets all Transactions per sent Category ID, if category exists
+    /// @param _catId Category ID
+    /// @return 32 character name of the Category
+    /// @return Entry object containing each entry and their timestamps
     function getAllTransactionsPerCat(uint256 _catId)
         external
         view
         alreadySigned
         whenNotPaused
+        categoryExists(_catId)
         returns (bytes32, Entry[] memory)
     {
         Account storage _ac = _accounts[msg.sender];
@@ -231,27 +292,51 @@ contract ETracker is
         return (_catName, allEntries);
     }
 
-    /// @notice Gets the entry at that Category an Entry Object with amount and timestamps
+    /// @notice Gets the entry of a category, if the category exists and have entries
+    /// @param _catId Category ID
+    /// @param _entryId Entry ID
+    /// @return Entry Object with entry amount and timestamps
     function getEntry(uint256 _catId, uint256 _entryId)
         external
         view
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
         returns (Entry memory)
     {
+        require(
+            _accounts[msg.sender].catToAmountofEntries[_entryId] > 0,
+            "Dont have entries!"
+        );
         return _accounts[msg.sender].entries[_catId][_entryId];
+    }
+
+    /// @notice Gets whether a user has an account
+    /// @return Does user have an account?
+    function getAccount() external view returns (bool) {
+        if (_accounts[msg.sender].name != bytes32(0)) {
+            return true;
+        }
+        return false;
     }
 
     // =============================================================
     //                           DELETORS
     // =============================================================
 
-    /// @notice Delete that Entry
+    /// @notice Delete an Entry if category exists, and the category has an entry
+    /// @param _catId Category ID
+    /// @param _entryId Entry ID
     function deleteEntry(uint256 _catId, uint256 _entryId)
         external
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
     {
+        require(
+            _accounts[msg.sender].catToAmountofEntries[_catId] > 0,
+            "Doesnt have entries"
+        );
         Account storage _ac = _accounts[msg.sender];
         require(
             _ac.entries[_catId][_entryId].created_At != uint256(0),
@@ -265,11 +350,13 @@ contract ETracker is
         );
     }
 
-    /// @notice Delete Category
+    /// @notice Delete Category if category exists
+    /// @param _catId Category ID
     function deleteCategory(uint256 _catId)
         external
         whenNotPaused
         alreadySigned
+        categoryExists(_catId)
     {
         Account storage _ac = _accounts[msg.sender];
         uint256 _entryAmount = _ac.catToAmountofEntries[_catId];
