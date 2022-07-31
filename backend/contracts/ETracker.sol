@@ -46,7 +46,7 @@ contract ETracker is
     }
 
     // =============================================================
-    //                           CREATION
+    //                           CREATORS
     // =============================================================
 
     /// @notice Create an account if it does not exist
@@ -85,17 +85,8 @@ contract ETracker is
         _accounts[msg.sender].entries[_catId][_newEntryId].update_At = _nowTime;
     }
 
-    /// @notice Change the name to the new name
-    function changeName(bytes32 _newName) external whenNotPaused alreadySigned {
-        require(
-            _accounts[msg.sender].name != _newName,
-            "Setting name is the same!"
-        );
-        _accounts[msg.sender].name = _newName;
-    }
-
     // =============================================================
-    //                           UPDATION
+    //                           UPDATORS
     // =============================================================
 
     /// @notice Change the name of the Category per the ID
@@ -109,6 +100,34 @@ contract ETracker is
             "You have passed the same name"
         );
         _accounts[msg.sender].categories[_catId] = _newName;
+    }
+
+    /// @notice Update the Entry if created
+    function updateEntry(
+        uint256 _catId,
+        uint256 _entryId,
+        int256 _newAmount
+    ) external alreadySigned whenNotPaused {
+        require(
+            _accounts[msg.sender].entries[_catId][_entryId].created_At !=
+                uint256(0),
+            "This entry is not created yet!"
+        );
+        Entry storage _entry = _accounts[msg.sender].entries[_catId][_entryId];
+        _entry.amount = _newAmount;
+        _entry.update_At = block.timestamp;
+        assert(
+            _accounts[msg.sender].entries[_catId][_entryId].amount == _newAmount
+        );
+    }
+
+    /// @notice Change the name to the new name
+    function updateName(bytes32 _newName) external whenNotPaused alreadySigned {
+        require(
+            _accounts[msg.sender].name != _newName,
+            "Setting name is the same!"
+        );
+        _accounts[msg.sender].name = _newName;
     }
 
     // =============================================================
@@ -222,6 +241,56 @@ contract ETracker is
     {
         return _accounts[msg.sender].entries[_catId][_entryId];
     }
+
+    // =============================================================
+    //                           DELETORS
+    // =============================================================
+
+    /// @notice Delete that Entry
+    function deleteEntry(uint256 _catId, uint256 _entryId)
+        external
+        whenNotPaused
+        alreadySigned
+    {
+        Account storage _ac = _accounts[msg.sender];
+        require(
+            _ac.entries[_catId][_entryId].created_At != uint256(0),
+            "This entry does not exist!"
+        );
+        _ac.catToAmountofEntries[_catId]--;
+        delete _ac.entries[_catId][_entryId];
+        assert(
+            _accounts[msg.sender].entries[_catId][_entryId].created_At ==
+                uint256(0)
+        );
+    }
+
+    /// @notice Delete Category
+    function deleteCategory(uint256 _catId)
+        external
+        whenNotPaused
+        alreadySigned
+    {
+        Account storage _ac = _accounts[msg.sender];
+        uint256 _entryAmount = _ac.catToAmountofEntries[_catId];
+        if (_entryAmount > 0) {
+            for (uint256 i; i < _entryAmount; i++) {
+                delete _ac.entries[_catId][i]; // Delete each entry
+            }
+        }
+        delete _ac.categories[_catId]; // Delete the Category Name
+        _ac.amountOfCategories--; // Reduce the amount of categories
+        delete _ac.catToAmountofEntries[_catId]; // Delete the Amount of Entries in that category
+    }
+
+    /// @notice Delete Account
+    function deleteAccount() external whenNotPaused alreadySigned {
+        delete _accounts[msg.sender];
+    }
+
+    // =============================================================
+    //                           MAIN
+    // =============================================================
 
     /// @notice Main Initialize function
     function initialize() public initializer {
