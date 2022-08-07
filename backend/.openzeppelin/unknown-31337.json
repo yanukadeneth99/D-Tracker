@@ -3,14 +3,14 @@
   "proxies": [
     {
       "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-      "txHash": "0xf5f3cfc88742de7bc185c5297e5bd8b1ad0cbe7b0443e76cad810d7d2ae43104",
+      "txHash": "0x7fe200d98bd1db169bf6d8c1f5655e1e8cedca814397604ea972763e9c60d61a",
       "kind": "uups"
     }
   ],
   "impls": {
-    "2fc92843334f999d63ee01d166c0fca725a49ccbf8297e34e1bdbc4045eabbfd": {
+    "14840b38853885001df98b1a2dd4e6308e2086aab48f4c145cbe1ff13ba4728f": {
       "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-      "txHash": "0xbff2e408b42c2f18742e3d93c5dbb1704a7592c4d765f153069e555f611123eb",
+      "txHash": "0xf2ab8a43729384770103fcd45ff9adc4a56ec3c42381a089d16698017a990af0",
       "layout": {
         "storage": [
           {
@@ -69,6 +69,30 @@
             "type": "t_array(t_uint256)49_storage",
             "contract": "OwnableUpgradeable",
             "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "_paused",
+            "offset": 0,
+            "slot": "201",
+            "type": "t_bool",
+            "contract": "PausableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\PausableUpgradeable.sol:29"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "202",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "PausableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\PausableUpgradeable.sol:116"
+          },
+          {
+            "label": "_accounts",
+            "offset": 0,
+            "slot": "251",
+            "type": "t_mapping(t_address,t_struct(Account)1314_storage)",
+            "contract": "ETracker",
+            "src": "contracts\\ETracker.sol:38"
           }
         ],
         "types": {
@@ -87,6 +111,94 @@
           "t_bool": {
             "label": "bool",
             "numberOfBytes": "1"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_int256": {
+            "label": "int256",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(Account)1314_storage)": {
+            "label": "mapping(address => struct ETracker.Account)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bytes32)": {
+            "label": "mapping(uint256 => bytes32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(Entry)1321_storage))": {
+            "label": "mapping(uint256 => mapping(uint256 => struct ETracker.Entry))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Entry)1321_storage)": {
+            "label": "mapping(uint256 => struct ETracker.Entry)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint256)": {
+            "label": "mapping(uint256 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Account)1314_storage": {
+            "label": "struct ETracker.Account",
+            "members": [
+              {
+                "label": "name",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "amountOfCategories",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "categories",
+                "type": "t_mapping(t_uint256,t_bytes32)",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "catToAmountofEntries",
+                "type": "t_mapping(t_uint256,t_uint256)",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "entries",
+                "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(Entry)1321_storage))",
+                "offset": 0,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_struct(Entry)1321_storage": {
+            "label": "struct ETracker.Entry",
+            "members": [
+              {
+                "label": "amount",
+                "type": "t_int256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "created_At",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "update_At",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
           },
           "t_uint256": {
             "label": "uint256",
